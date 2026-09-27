@@ -366,6 +366,18 @@ pub(crate) fn project_down(
             DmTensor::new();
 
         for j in 0..HALVES_PER_PASS {
+            let down_weight_scale_vrf: VrfTensor<f32, Chip, Cluster, DownRows, m![H % 120 = 2, L / 16]> = device
+                .sub
+                .begin(
+                    down_weight_scale
+                        .view()
+                        .tile::<m![H % 120], 2, m![H % 120 = 2 # 120, L / 16]>(4 * i + 2 * j),
+                )
+                .fetch::<m![H % 120 = 2], m![L / 16]>()
+                .fetch_cast::<f32>()
+                .collect::<m![H % 120 = 2, L / 16 / 8], m![L / 16 % 8]>()
+                .to_vrf();
+
             let down_weight_packed: DmTensor<f4e2m1, Chip, Cluster, DownRows, m![H % 120 = 2, L]> = down_weight_packed
                 .view()
                 .tile::<m![H % 120], 2, m![H / 120, H % 120 = 2 # 120, L]>(4 * i + 2 * j)
@@ -378,18 +390,6 @@ pub(crate) fn project_down(
                 .collect::<m![H % 120 = 2, L / 32], m![L % 32]>()
                 .commit_trim::<m![L % 32]>()
                 .commit();
-
-            let down_weight_scale_vrf: VrfTensor<f32, Chip, Cluster, DownRows, m![H % 120 = 2, L / 16]> = device
-                .sub
-                .begin(
-                    down_weight_scale
-                        .view()
-                        .tile::<m![H % 120], 2, m![H % 120 = 2 # 120, L / 16]>(4 * i + 2 * j),
-                )
-                .fetch::<m![H % 120 = 2], m![L / 16]>()
-                .fetch_cast::<f32>()
-                .collect::<m![H % 120 = 2, L / 16 / 8], m![L / 16 % 8]>()
-                .to_vrf();
 
             let down_weight_tile: DmTensor<bf16, Chip, Cluster, DownRows, m![H % 120 = 2, L]> = device
                 .main
